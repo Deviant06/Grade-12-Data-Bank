@@ -3,27 +3,98 @@ import Navbar from '@/components/Navbar';
 import { Button } from "@/components/ui/button";
 import { supabase } from "../lib/supabase";
 import { toast } from "sonner";
-import { InfoIcon, Upload } from 'lucide-react';
+import { InfoIcon, Upload, AlertTriangle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import * as XLSX from 'xlsx';
 import { useDropzone } from 'react-dropzone';
 
 interface Student {
-  id: string;
+  student_id: string;
   name: string;
   grade: string;
   section: string;
-  // Add other fields as needed
 }
 
 const Import = () => {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [previewData, setPreviewData] = useState<Student[]>([]);
+  const [invalidRows, setInvalidRows] = useState<number[]>([]);
+
+  const validateAndPreviewFile = async (file: File) => {
+    try {
+      const reader = new FileReader();
+      
+      reader.onload = async (e) => {
+        try {
+          const data = e.target?.result;
+          if (!data) {
+            throw new Error('No data read from file');
+          }
+
+          // Parse the Excel data
+          const workbook = XLSX.read(data, { type: "binary" });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+          if (!Array.isArray(jsonData) || jsonData.length === 0) {
+            throw new Error('No valid data found in file');
+          }
+
+          // Transform and validate the data
+          const students = jsonData.map((row: any) => ({
+            student_id: row["Student ID"] || "",
+            name: row["Name"] || "",
+            grade: row["Grade"] || "",
+            section: row["Section"] || "",
+          }));
+
+          // Find invalid rows
+          const invalid = students.reduce((acc: number[], student, index) => {
+            if (!student.student_id || !student.name || !student.grade || !student.section) {
+              acc.push(index);
+            }
+            return acc;
+          }, []);
+
+          setPreviewData(students);
+          setInvalidRows(invalid);
+
+          if (invalid.length > 0) {
+            toast.warning(`${invalid.length} records have missing required fields. Please check the preview below.`);
+          } else {
+            toast.success('File validated successfully. Review the data below before importing.');
+          }
+        } catch (error) {
+          console.error('Error previewing file:', error);
+          toast.error(error instanceof Error ? error.message : 'Error previewing file');
+          setFile(null);
+        }
+      };
+
+      reader.readAsBinaryString(file);
+    } catch (error) {
+      console.error('Error reading file:', error);
+      toast.error('Error reading file');
+      setFile(null);
+    }
+  };
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
-      setFile(acceptedFiles[0]);
-      console.log('File selected:', acceptedFiles[0]);
+      const file = acceptedFiles[0];
+      setFile(file);
+      console.log('File selected:', file);
+      validateAndPreviewFile(file);
     }
   }, []);
 
@@ -47,88 +118,33 @@ const Import = () => {
   });
 
   const handleUpload = async () => {
-    if (!file) {
-      toast.error("Please select a file first");
+    if (!file || invalidRows.length > 0) {
+      toast.error(invalidRows.length > 0 ? "Please fix invalid records before importing" : "Please select a file first");
       return;
     }
 
     try {
       setUploading(true);
-      console.log('Starting file upload process...');
+      console.log('Starting upload to Supabase...');
 
-      // Read the Excel file
-      const reader = new FileReader();
-      
-      reader.onerror = (error) => {
-        console.error('FileReader error:', error);
-        toast.error('Error reading file');
-        setUploading(false);
-      };
+      // Upload to Supabase
+      const { error } = await supabase
+        .from("students")
+        .insert(previewData);
 
-      reader.onload = async (e) => {
-        try {
-          console.log('File read successfully');
-          const data = e.target?.result;
-          if (!data) {
-            throw new Error('No data read from file');
-          }
+      if (error) {
+        throw error;
+      }
 
-          // Parse the Excel data
-          console.log('Parsing Excel data...');
-          const workbook = XLSX.read(data, { type: "binary" });
-          const sheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-          console.log('Parsed data:', jsonData);
-
-          if (!Array.isArray(jsonData) || jsonData.length === 0) {
-            throw new Error('No valid data found in file');
-          }
-
-          // Transform the data to match our database schema
-          console.log('Transforming data...');
-          const students = jsonData.map((row: any) => ({
-            student_id: row["Student ID"] || "",
-            name: row["Name"] || "",
-            grade: row["Grade"] || "",
-            section: row["Section"] || "",
-            // Add other fields as needed
-          }));
-
-          // Validate data
-          const invalidStudents = students.filter(student => 
-            !student.student_id || !student.name || !student.grade || !student.section
-          );
-
-          if (invalidStudents.length > 0) {
-            throw new Error(`${invalidStudents.length} records are missing required fields`);
-          }
-
-          // Upload to Supabase
-          console.log('Uploading to Supabase...');
-          const { error } = await supabase
-            .from("students")
-            .insert(students);
-
-          if (error) {
-            throw error;
-          }
-
-          console.log('Upload successful');
-          toast.success(`${students.length} student records have been imported successfully!`);
-          setFile(null);
-        } catch (error) {
-          console.error('Error in reader.onload:', error);
-          toast.error(error instanceof Error ? error.message : 'Error processing file');
-        } finally {
-          setUploading(false);
-        }
-      };
-
-      reader.readAsBinaryString(file);
+      console.log('Upload successful');
+      toast.success(`${previewData.length} student records have been imported successfully!`);
+      setFile(null);
+      setPreviewData([]);
+      setInvalidRows([]);
     } catch (error) {
       console.error("Error in handleUpload:", error);
       toast.error("Error importing students");
+    } finally {
       setUploading(false);
     }
   };
@@ -212,6 +228,83 @@ const Import = () => {
             </p>
           </div>
 
+          {previewData.length > 0 && (
+            <div className="mt-8">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">Data Preview</h3>
+                <p className="text-sm text-muted-foreground">
+                  Showing {previewData.length} records
+                </p>
+              </div>
+
+              {invalidRows.length > 0 && (
+                <Alert className="mb-4" variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Invalid Records Found</AlertTitle>
+                  <AlertDescription>
+                    {invalidRows.length} records have missing required fields (highlighted in red).
+                    Please fix these records in your Excel file and upload again.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[100px]">Row #</TableHead>
+                      <TableHead>Student ID</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Grade</TableHead>
+                      <TableHead>Section</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {previewData.map((student, index) => (
+                      <TableRow 
+                        key={index}
+                        className={invalidRows.includes(index) ? 'bg-red-50' : undefined}
+                      >
+                        <TableCell className="font-medium">{index + 1}</TableCell>
+                        <TableCell className={!student.student_id ? 'text-red-500' : undefined}>
+                          {student.student_id || 'Missing'}
+                        </TableCell>
+                        <TableCell className={!student.name ? 'text-red-500' : undefined}>
+                          {student.name || 'Missing'}
+                        </TableCell>
+                        <TableCell className={!student.grade ? 'text-red-500' : undefined}>
+                          {student.grade || 'Missing'}
+                        </TableCell>
+                        <TableCell className={!student.section ? 'text-red-500' : undefined}>
+                          {student.section || 'Missing'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="mt-6 flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  {invalidRows.length === 0 ? (
+                    <span className="text-green-600">✓ All records are valid</span>
+                  ) : (
+                    <span className="text-red-500">
+                      ⚠ {invalidRows.length} invalid records found
+                    </span>
+                  )}
+                </p>
+                <Button
+                  onClick={handleUpload}
+                  disabled={uploading || invalidRows.length > 0}
+                  className="ml-auto"
+                >
+                  {uploading ? "Importing..." : "Import Students"}
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-between mt-6">
             <p className="text-sm text-green-600 flex items-center gap-1">
               <span className="inline-block w-2 h-2 rounded-full bg-green-600"></span>
@@ -221,16 +314,6 @@ const Import = () => {
               Download Template
             </Button>
           </div>
-
-          {file && (
-            <Button 
-              className="mt-6 w-full"
-              onClick={handleUpload}
-              disabled={uploading}
-            >
-              {uploading ? "Importing..." : "Import Students"}
-            </Button>
-          )}
         </div>
       </main>
     </div>
