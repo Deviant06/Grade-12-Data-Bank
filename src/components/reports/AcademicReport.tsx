@@ -63,7 +63,7 @@ const AcademicReport: React.FC = () => {
                   name: grade.name,
                   average: Object.entries(grade)
                     .filter(([key]) => key !== 'name')
-                    .reduce((sum, [_, value]) => sum + (value as number), 0) / 6
+                    .reduce((sum, [_, value]) => sum + Number(value), 0) / 6
                 }))
                 .sort((a, b) => b.average - a.average)
                 .slice(0, 3)
@@ -93,7 +93,7 @@ const AcademicReport: React.FC = () => {
           <CardContent>
             <div className="space-y-4">
               {['Math', 'Science', 'English', 'Filipino', 'History', 'P.E.'].map(subject => {
-                const average = performanceData.reduce((sum, grade) => sum + (grade[subject] as number), 0) / performanceData.length;
+                const average = performanceData.reduce((sum, grade) => sum + Number(grade[subject]), 0) / performanceData.length;
                 return (
                   <div key={subject} className="space-y-1">
                     <div className="flex items-center justify-between">
