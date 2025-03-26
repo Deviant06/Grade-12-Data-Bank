@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
 import { Button } from "@/components/ui/button";
 import { supabase } from "../lib/supabase";
 import { toast } from "sonner";
-import { InfoIcon } from 'lucide-react';
+import { InfoIcon, Upload } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import * as XLSX from 'xlsx';
+import { useDropzone } from 'react-dropzone';
 
 interface Student {
   id: string;
@@ -19,11 +20,22 @@ const Import = () => {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    if (acceptedFiles.length > 0) {
+      setFile(acceptedFiles[0]);
     }
-  };
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'application/vnd.ms-excel': ['.xls'],
+      'text/csv': ['.csv']
+    },
+    maxSize: 5 * 1024 * 1024, // 5MB
+    maxFiles: 1
+  });
 
   const handleUpload = async () => {
     if (!file) {
@@ -77,6 +89,22 @@ const Import = () => {
     }
   };
 
+  const downloadTemplate = () => {
+    // Create a sample Excel template
+    const ws = XLSX.utils.json_to_sheet([{
+      'Student ID': 'Sample-001',
+      'Name': 'Juan Dela Cruz',
+      'Grade': '12',
+      'Section': 'A'
+    }]);
+    
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Students');
+    
+    // Save the file
+    XLSX.writeFile(wb, 'student-import-template.xlsx');
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -88,7 +116,7 @@ const Import = () => {
           </p>
         </div>
         
-        <Alert className="mb-6 max-w-3xl mx-auto">
+        <Alert className="mb-6">
           <InfoIcon className="h-4 w-4" />
           <AlertTitle>Bulk Import Instructions</AlertTitle>
           <AlertDescription>
@@ -100,34 +128,60 @@ const Import = () => {
             </p>
           </AlertDescription>
         </Alert>
-        
-        <div className="space-y-4">
-          <div className="flex items-center space-x-4">
-            <input
-              type="file"
-              onChange={handleFileChange}
-              accept=".xlsx,.xls"
-              className="hidden"
-              id="file-upload"
-            />
-            <label
-              htmlFor="file-upload"
-              className="cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md"
-            >
-              Select Excel File
-            </label>
-            {file && (
-              <span className="text-sm text-muted-foreground">
-                {file.name}
-              </span>
-            )}
-          </div>
-          <Button
-            onClick={handleUpload}
-            disabled={!file || uploading}
+
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold mb-4">Import Student Records</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Upload an Excel or CSV file containing student information
+          </p>
+
+          <div 
+            {...getRootProps()} 
+            className={`
+              border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
+              transition-colors duration-200 ease-in-out
+              ${isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'}
+              hover:border-primary hover:bg-primary/5
+            `}
           >
-            {uploading ? "Importing..." : "Import"}
-          </Button>
+            <input {...getInputProps()} />
+            <div className="flex flex-col items-center gap-2">
+              <Upload className="h-10 w-10 text-muted-foreground" />
+              <p className="text-lg font-medium">Drag and drop your file here</p>
+              <p className="text-sm text-muted-foreground">or click the button below to browse files</p>
+              <Button variant="secondary" className="mt-2">
+                Select File
+              </Button>
+            </div>
+            {file && (
+              <p className="mt-4 text-sm text-muted-foreground">
+                Selected file: {file.name}
+              </p>
+            )}
+            <p className="mt-2 text-xs text-muted-foreground">
+              Supports Excel (.xlsx, .xls) and CSV files up to 5MB
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between mt-6">
+            <p className="text-sm text-green-600 flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-full bg-green-600"></span>
+              Bulk import automatically validates data
+            </p>
+            <Button variant="outline" onClick={downloadTemplate}>
+              Download Template
+            </Button>
+          </div>
+
+          {file && (
+            <Button 
+              className="mt-6 w-full"
+              onClick={handleUpload}
+              disabled={uploading}
+            >
+              {uploading ? "Importing..." : "Import Students"}
+            </Button>
+          )}
         </div>
       </main>
     </div>
