@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import Navbar from '@/components/Navbar';
 import { dummyStudents } from '@/utils/studentData';
@@ -361,8 +360,7 @@ const Reports = () => {
                     <BarChart 
                       data={gradeDistribution.map(grade => ({
                         name: grade.name,
-                        // Here's the fixed type conversion - converting the random number to a number type explicitly
-                        rate: Number(Math.floor(Math.random() * 10) + 88) // 88-98%
+                        rate: Number(Math.floor(Math.random() * 10) + 88)
                       }))} 
                       margin={{ top: 20, right: 30, bottom: 20, left: 30 }}
                     >
