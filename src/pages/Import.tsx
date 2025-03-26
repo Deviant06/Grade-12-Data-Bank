@@ -23,6 +23,7 @@ const Import = () => {
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
       setFile(acceptedFiles[0]);
+      console.log('File selected:', acceptedFiles[0]);
     }
   }, []);
 
@@ -34,7 +35,15 @@ const Import = () => {
       'text/csv': ['.csv']
     },
     maxSize: 5 * 1024 * 1024, // 5MB
-    maxFiles: 1
+    maxFiles: 1,
+    onDropRejected: (rejectedFiles) => {
+      console.log('Files rejected:', rejectedFiles);
+      if (rejectedFiles[0]?.errors[0]?.code === 'file-too-large') {
+        toast.error('File is too large. Maximum size is 5MB.');
+      } else if (rejectedFiles[0]?.errors[0]?.code === 'file-invalid-type') {
+        toast.error('Invalid file type. Please upload an Excel or CSV file.');
+      }
+    }
   });
 
   const handleUpload = async () => {
@@ -45,64 +54,104 @@ const Import = () => {
 
     try {
       setUploading(true);
+      console.log('Starting file upload process...');
 
       // Read the Excel file
       const reader = new FileReader();
+      
+      reader.onerror = (error) => {
+        console.error('FileReader error:', error);
+        toast.error('Error reading file');
+        setUploading(false);
+      };
+
       reader.onload = async (e) => {
-        const data = e.target?.result;
-        if (!data) return;
+        try {
+          console.log('File read successfully');
+          const data = e.target?.result;
+          if (!data) {
+            throw new Error('No data read from file');
+          }
 
-        // Parse the Excel data
-        const workbook = XLSX.read(data, { type: "binary" });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+          // Parse the Excel data
+          console.log('Parsing Excel data...');
+          const workbook = XLSX.read(data, { type: "binary" });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+          console.log('Parsed data:', jsonData);
 
-        // Transform the data to match our database schema
-        const students = jsonData.map((row: any) => ({
-          student_id: row["Student ID"] || "",
-          name: row["Name"] || "",
-          grade: row["Grade"] || "",
-          section: row["Section"] || "",
-          // Add other fields as needed
-        }));
+          if (!Array.isArray(jsonData) || jsonData.length === 0) {
+            throw new Error('No valid data found in file');
+          }
 
-        // Upload to Supabase
-        const { error } = await supabase
-          .from("students")
-          .insert(students);
+          // Transform the data to match our database schema
+          console.log('Transforming data...');
+          const students = jsonData.map((row: any) => ({
+            student_id: row["Student ID"] || "",
+            name: row["Name"] || "",
+            grade: row["Grade"] || "",
+            section: row["Section"] || "",
+            // Add other fields as needed
+          }));
 
-        if (error) {
-          throw error;
+          // Validate data
+          const invalidStudents = students.filter(student => 
+            !student.student_id || !student.name || !student.grade || !student.section
+          );
+
+          if (invalidStudents.length > 0) {
+            throw new Error(`${invalidStudents.length} records are missing required fields`);
+          }
+
+          // Upload to Supabase
+          console.log('Uploading to Supabase...');
+          const { error } = await supabase
+            .from("students")
+            .insert(students);
+
+          if (error) {
+            throw error;
+          }
+
+          console.log('Upload successful');
+          toast.success(`${students.length} student records have been imported successfully!`);
+          setFile(null);
+        } catch (error) {
+          console.error('Error in reader.onload:', error);
+          toast.error(error instanceof Error ? error.message : 'Error processing file');
+        } finally {
+          setUploading(false);
         }
-
-        toast.success(`${students.length} student records have been imported successfully!`);
-        setFile(null);
       };
 
       reader.readAsBinaryString(file);
     } catch (error) {
-      console.error("Error importing students:", error);
+      console.error("Error in handleUpload:", error);
       toast.error("Error importing students");
-    } finally {
       setUploading(false);
     }
   };
 
   const downloadTemplate = () => {
-    // Create a sample Excel template
-    const ws = XLSX.utils.json_to_sheet([{
-      'Student ID': 'Sample-001',
-      'Name': 'Juan Dela Cruz',
-      'Grade': '12',
-      'Section': 'A'
-    }]);
-    
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Students');
-    
-    // Save the file
-    XLSX.writeFile(wb, 'student-import-template.xlsx');
+    try {
+      // Create a sample Excel template
+      const ws = XLSX.utils.json_to_sheet([{
+        'Student ID': 'Sample-001',
+        'Name': 'Juan Dela Cruz',
+        'Grade': '12',
+        'Section': 'A'
+      }]);
+      
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Students');
+      
+      // Save the file
+      XLSX.writeFile(wb, 'student-import-template.xlsx');
+    } catch (error) {
+      console.error('Error downloading template:', error);
+      toast.error('Error downloading template');
+    }
   };
 
   return (
@@ -124,7 +173,7 @@ const Import = () => {
               Upload an Excel (.xlsx, .xls) or CSV file with student information. The system will automatically map columns and import the data.
             </p>
             <p className="text-sm">
-              For best results, use column names like: First Name, Last Name, Gender, Date of Birth, etc. You can download a template below.
+              For best results, use column names like: Student ID, Name, Grade, Section. You can download a template below.
             </p>
           </AlertDescription>
         </Alert>
