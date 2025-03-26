@@ -1,33 +1,21 @@
+import { FileUpload } from './components/FileUpload'
+import { FileList } from './components/FileList'
+import { Toaster } from 'sonner'
 
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
-import Students from "./pages/Students";
-import Import from "./pages/Import";
-import Reports from "./pages/Reports";
-import NotFound from "./pages/NotFound";
-
-const queryClient = new QueryClient();
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
+function App() {
+  return (
+    <div className="container mx-auto py-8">
+      <h1 className="text-4xl font-bold mb-8">Data Bridge HQ</h1>
+      <div className="space-y-8">
+        <div className="p-6 border rounded-lg">
+          <h2 className="text-2xl font-bold mb-4">Upload Files</h2>
+          <FileUpload />
+        </div>
+        <FileList />
+      </div>
       <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/students" element={<Students />} />
-          <Route path="/import" element={<Import />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+    </div>
+  )
+}
 
-export default App;
+export default App
