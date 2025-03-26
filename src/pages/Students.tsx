@@ -1,11 +1,45 @@
-
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import StudentTable from '@/components/StudentTable';
-import { dummyStudents } from '@/utils/studentData';
+import { supabase } from '../lib/supabase';
+import { toast } from 'sonner';
+
+interface Student {
+  id: string;
+  student_id: string;
+  name: string;
+  grade: string;
+  section: string;
+  created_at: string;
+}
 
 const Students = () => {
-  const [students, setStudents] = useState(dummyStudents);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchStudents();
+  }, []);
+
+  const fetchStudents = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      setStudents(data || []);
+    } catch (error) {
+      console.error('Error fetching students:', error);
+      toast.error('Error fetching students');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -18,7 +52,11 @@ const Students = () => {
           </p>
         </div>
         
-        <StudentTable students={students} />
+        {loading ? (
+          <div>Loading...</div>
+        ) : (
+          <StudentTable students={students} />
+        )}
       </main>
     </div>
   );
