@@ -361,8 +361,8 @@ const Reports = () => {
                     <BarChart 
                       data={gradeDistribution.map(grade => ({
                         name: grade.name,
-                        // Fix for the type error: Convert the random number to a number explicitly
-                        rate: Math.floor(Math.random() * 10) + 88 // 88-98%
+                        // Here's the fixed type conversion - converting the random number to a number type explicitly
+                        rate: Number(Math.floor(Math.random() * 10) + 88) // 88-98%
                       }))} 
                       margin={{ top: 20, right: 30, bottom: 20, left: 30 }}
                     >
