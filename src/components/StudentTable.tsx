@@ -43,9 +43,10 @@ interface Student {
 
 interface StudentTableProps {
   students: Student[];
+  onRefresh: () => Promise<void>;
 }
 
-const StudentTable: React.FC<StudentTableProps> = ({ students }) => {
+const StudentTable: React.FC<StudentTableProps> = ({ students, onRefresh }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<keyof Student>('name');

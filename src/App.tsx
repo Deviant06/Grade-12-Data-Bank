@@ -1,19 +1,29 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, createBrowserRouter, RouterProvider } from 'react-router-dom'
 import Students from './pages/Students'
 import Import from './pages/Import'
 import Reports from './pages/Reports'
 
+const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <Students />
+  },
+  {
+    path: "/students",
+    element: <Students />
+  },
+  {
+    path: "/import",
+    element: <Import />
+  },
+  {
+    path: "/reports",
+    element: <Reports />
+  }
+])
+
 function App() {
-  return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Navigate to="/students" replace />} />
-        <Route path="/students" element={<Students />} />
-        <Route path="/import" element={<Import />} />
-        <Route path="/reports" element={<Reports />} />
-      </Routes>
-    </Router>
-  )
+  return <RouterProvider router={router} />
 }
 
 export default App

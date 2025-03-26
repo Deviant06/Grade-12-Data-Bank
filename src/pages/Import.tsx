@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import * as XLSX from 'xlsx';
 import { useDropzone } from 'react-dropzone';
+import { useNavigate } from 'react-router-dom';
 
 interface Student {
   student_id: string;
@@ -28,6 +29,7 @@ const Import = () => {
   const [uploading, setUploading] = useState(false);
   const [previewData, setPreviewData] = useState<Student[]>([]);
   const [invalidRows, setInvalidRows] = useState<number[]>([]);
+  const navigate = useNavigate();
 
   const validateAndPreviewFile = async (file: File) => {
     try {
@@ -52,10 +54,10 @@ const Import = () => {
 
           // Transform and validate the data
           const students = jsonData.map((row: any) => ({
-            student_id: row["Student ID"] || "",
-            name: row["Name"] || "",
-            grade: row["Grade"] || "",
-            section: row["Section"] || "",
+            student_id: String(row["Student ID"] || "").trim(),
+            name: String(row["Name"] || "").trim(),
+            grade: String(row["Grade"] || "").trim(),
+            section: String(row["Section"] || "").trim(),
           }));
 
           // Find invalid rows
@@ -93,7 +95,6 @@ const Import = () => {
     if (acceptedFiles.length > 0) {
       const file = acceptedFiles[0];
       setFile(file);
-      console.log('File selected:', file);
       validateAndPreviewFile(file);
     }
   }, []);
@@ -108,7 +109,6 @@ const Import = () => {
     maxSize: 5 * 1024 * 1024, // 5MB
     maxFiles: 1,
     onDropRejected: (rejectedFiles) => {
-      console.log('Files rejected:', rejectedFiles);
       if (rejectedFiles[0]?.errors[0]?.code === 'file-too-large') {
         toast.error('File is too large. Maximum size is 5MB.');
       } else if (rejectedFiles[0]?.errors[0]?.code === 'file-invalid-type') {
@@ -117,7 +117,7 @@ const Import = () => {
     }
   });
 
-  const handleUpload = async () => {
+  const handleImport = async () => {
     if (!file || invalidRows.length > 0) {
       toast.error(invalidRows.length > 0 ? "Please fix invalid records before importing" : "Please select a file first");
       return;
@@ -125,25 +125,72 @@ const Import = () => {
 
     try {
       setUploading(true);
-      console.log('Starting upload to Supabase...');
 
-      // Upload to Supabase
-      const { error } = await supabase
+      // Transform data to match Supabase schema
+      const studentsToImport = previewData.map(student => ({
+        student_id: student.student_id,
+        name: student.name,
+        grade: student.grade,
+        section: student.section
+      }));
+
+      console.log('Importing students:', studentsToImport);
+
+      // Try a single record first to test the connection
+      const testResult = await supabase
         .from("students")
-        .insert(previewData);
+        .insert([studentsToImport[0]])
+        .select();
 
-      if (error) {
-        throw error;
+      console.log('Test import result:', testResult);
+
+      if (testResult.error) {
+        throw new Error(`Database error: ${testResult.error.message}`);
       }
 
-      console.log('Upload successful');
-      toast.success(`${previewData.length} student records have been imported successfully!`);
+      // If test successful, proceed with batch import
+      const batchSize = 50;
+      const batches = [];
+      
+      for (let i = 0; i < studentsToImport.length; i += batchSize) {
+        const batch = studentsToImport.slice(i, i + batchSize);
+        batches.push(batch);
+      }
+
+      let importedCount = 0;
+      
+      for (const batch of batches) {
+        const { data, error } = await supabase
+          .from("students")
+          .insert(batch)
+          .select();
+
+        if (error) {
+          console.error('Supabase error:', error);
+          throw new Error(`Database error: ${error.message}`);
+        }
+
+        console.log('Batch import result:', data);
+        importedCount += batch.length;
+        toast.success(`Imported ${importedCount} of ${studentsToImport.length} students...`);
+      }
+
+      toast.success(`Successfully imported ${importedCount} students!`);
+      navigate('/students');
       setFile(null);
       setPreviewData([]);
       setInvalidRows([]);
-    } catch (error) {
-      console.error("Error in handleUpload:", error);
-      toast.error("Error importing students");
+    } catch (error: any) {
+      console.error('Error importing students:', error);
+      toast.error(`Failed to import students: ${error.message}`);
+      
+      // Additional error details
+      if (error.code) {
+        console.error('Error code:', error.code);
+      }
+      if (error.details) {
+        console.error('Error details:', error.details);
+      }
     } finally {
       setUploading(false);
     }
@@ -153,7 +200,7 @@ const Import = () => {
     try {
       // Create a sample Excel template
       const ws = XLSX.utils.json_to_sheet([{
-        'Student ID': 'Sample-001',
+        'Student ID': '2024-0001',
         'Name': 'Juan Dela Cruz',
         'Grade': '12',
         'Section': 'A'
@@ -295,7 +342,7 @@ const Import = () => {
                   )}
                 </p>
                 <Button
-                  onClick={handleUpload}
+                  onClick={handleImport}
                   disabled={uploading || invalidRows.length > 0}
                   className="ml-auto"
                 >
